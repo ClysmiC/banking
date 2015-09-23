@@ -1,11 +1,20 @@
 #include "banking.h"
 #include "md5.h"
 
-void generateRandomString(char*, const int);
+#define CHALLENGE_SIZE 64
+#define CHALLENGE_TIMEOUT 10000
 
+void generateRandomString(char*, const int);
 void authenticate(int, bank_user*);
 
 bank_user users[5];
+
+typedef struct
+{
+    char challenge[CHALLENGE_SIZE] ;
+    long expirationTime;
+
+} challenge_t;
 
 /**
  * TCP banking server. Allows user to deposit, withdraw
@@ -101,15 +110,25 @@ int main(int argc, char *argv[])
 void authenticate(int commSocket, bank_user* user_out)
 {
     //send challenge
-    char randomString[CHALLENGE_SIZE];
+    char randomString[CHALLENGE_SIZE + 1];
     generateRandomString(randomString, CHALLENGE_SIZE);
+    randomString[CHALLENGE_SIZE] = '\0';
+    
     debugPrintf("Sending challenge: %s\n", randomString);
 
     send(commSocket, randomString, sizeof(randomString), 0);
 
-    debugPrintf("Challenge sent.\n");
+    //record time that challenge expires
+    struct timespec spec;
+    clock_gettime(CLOCK_REALTIME, &spec);
+    long ms = round(spec.tv_nsec / 1.0e6); // Convert nanoseconds to milliseconds
 
-    while(true){}
+    challenge_t challenge;
+    memcpy(challenge.challenge, randomString, CHALLENGE_SIZE);
+    challenge.expirationTime = ms + CHALLENGE_TIMEOUT;
+
+    debugPrintf("Challenge sent. Expires at: %ld\n", challenge.expirationTime);
+    debugPrintf("Awaiting response.\n");
 
     //recv response
 
