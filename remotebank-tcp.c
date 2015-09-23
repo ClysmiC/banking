@@ -1,4 +1,6 @@
 #include "banking.h"
+#include "md5.h"
+
 
 
 void authenticate(int socket, char *user, char *pass);
@@ -29,6 +31,14 @@ int main(int argc, char *argv[])
         {
             dieWithError("Usage: remotebank-tcp.c <Server IP>:<Port> <Username> <Password> <Transaction Type> <Transaction Amount> [-d]");
         }
+    }
+
+    char *name = argv[2];
+    char *pass = argv[3];
+
+    if(strlen(name) > 30 || strlen(pass) > 30)
+    {
+        dieWithError("Username/password must be max 30 characters.");
     }
 
 
@@ -124,6 +134,18 @@ void authenticate(int commSocket, char *user, char *pass)
     }
 
     challenge_buffer[CHALLENGE_SIZE] = '\0';
-
     debugPrintf("Challenge received: %s\n", challenge_buffer);
+
+    int preHashSize = strlen(user) + strlen(pass) + CHALLENGE_SIZE + 1;
+    char preHash[preHashSize];
+    memcpy(preHash, user, strlen(user));
+    memcpy(&preHash[strlen(user)], pass, strlen(pass));
+    memcpy(&preHash[strlen(user) + strlen(pass)], challenge_buffer, CHALLENGE_SIZE);
+    preHash[preHashSize - 1] = '\0';
+
+    debugPrintf("Pre-hashed string: %s\n", preHash);
+
+    unsigned int result = *md5(preHash, strlen(preHash));
+
+    debugPrintf("Hashed result: %#x", result);
 }

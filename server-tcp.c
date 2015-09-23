@@ -1,4 +1,5 @@
 #include "banking.h"
+#include "md5.h"
 
 void generateRandomString(char*, const int);
 
