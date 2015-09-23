@@ -19,8 +19,7 @@ bool debugMode = false;
 
 int main(int argc, char *argv[])
 {
-	
-
+	/**Ensure proper # of command line args**/
 	if (argc != 6 && argc != 7)
 	{
 		dieWithError("Usage: remotebank-tcp.c <Server IP>:<Port> <Username> <Password> <Transaction Type> <Transaction Amount> [-d]");
@@ -31,8 +30,9 @@ int main(int argc, char *argv[])
 		debugMode = true;
 	}
 
-	int socket;
 
+	/**Get position of colon within first argument**/
+	int clientSocket;
 	socket_address serverAddress;
 
 	char *colon = strchr(argv[1], ':');
@@ -43,26 +43,53 @@ int main(int argc, char *argv[])
 		dieWithError("Invalid IP address. Please use dotted quad notation.");
 	}
 
+
+	/**Substring first argument into IP and Port**/
+
+	/**IP**/
 	char serverIp[colonPosition + 1]; //+1 for \0 character
 
-	debugPrintf("%s\n", argv[1]);
-	debugPrintf("Colon position: %d\n", colonPosition);
-
-	//substring first argument into IP and Port
-	/**IP**/
 	memcpy(serverIp, &argv[1][0], colonPosition);
-	serverIp[colonPosition] = 0;
+	serverIp[colonPosition] = '\0';
+
+	if(((int)inet_addr(serverIp)) < 0)
+		dieWithError("Invalid IP address. Please use dotted quad notation.");
 
 	/**PORT**/
 	int portStrLength = strlen(argv[1]) - colonPosition;
-
 	char argumentPortStr[portStrLength + 1];
 	memcpy(argumentPortStr, &argv[1][colonPosition + 1], portStrLength);
 	argumentPortStr[portStrLength - 1] = '\0';
+	unsigned short serverPort = atoi(argumentPortStr); //parses to int
 
-	unsigned short serverPort = atoi(argumentPortStr);
+	debugPrintf("IP: %s, Port: %d\n", serverIp, serverPort);
 
-	debugPrintf("IP: %s, Port: %d", serverIp, serverPort);
+
+
+	/**Create socket**/
+
+	//TPPROTO_TCP for third argument not working on my windows machine. Using 0 (default) instead.
+	if((clientSocket = socket(PF_INET, SOCK_STREAM, 0)) < 0)
+	{
+		dieWithError("socket(...) failed");
+	}
+	debugPrintf("TCP socket created. File descriptor: %d\n", clientSocket);
+
+	//construct server address structure
+	memset(&serverAddress, 0, sizeof(serverAddress)); //zero out
+	serverAddress.sin_family = AF_INET;
+	serverAddress.sin_addr.s_addr = inet_addr(serverIp);
+	serverAddress.sin_port = htons(serverPort);
+
+	debugPrintf("Connecting to %s:%d . . .\n", serverIp, serverPort);
+
+	//establish connection
+	if(connect(clientSocket, (struct sockaddr *)&serverAddress, sizeof(serverAddress)) < 0)
+	{
+		dieWithError("connect(...) failed.");
+	}
+
+	debugPrintf("Connection successful");
 }
 
 void dieWithError(char *error)
@@ -82,4 +109,5 @@ void debugPrintf(char *fstring, ...)
     va_start(args, fstring);
     vprintf(fstring, args);
     va_end(args);
+    fflush(stdout);
 }
