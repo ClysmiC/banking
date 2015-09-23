@@ -1,11 +1,12 @@
 #include "banking.h"
 #include "md5.h"
 
+#define NUM_USERS 5
 
 void generateRandomString(char*, const int);
-void authenticate(int, bank_user*);
+void authenticate(int, bank_user**);
 
-bank_user users[5];
+bank_user users[NUM_USERS];
 
 typedef struct
 {
@@ -95,17 +96,22 @@ int main(int argc, char *argv[])
         debugPrintf("Socket file descriptor: %d\n", commSocket);
 
         bank_user *authenticatedUser;
-        authenticate(commSocket, authenticatedUser);
+        authenticate(commSocket, &authenticatedUser);
+
 
         if(authenticatedUser == NULL)
         {
+            // printf("Failed authentication attempt.");
             close(commSocket);
             debugPrintf("Closing client socket.\n");
-        }       
+        }
+        else
+        {
+        }
     }
 }
 
-void authenticate(int commSocket, bank_user* user_out)
+void authenticate(int commSocket, bank_user **user_out)
 {
     /**send challenge**/
     char randomString[CHALLENGE_SIZE + 1];
@@ -193,6 +199,27 @@ void authenticate(int commSocket, bank_user* user_out)
 
     debugPrintf("Hashed result: %#x\n", hash);
 
+    /**Get password (stored in memory) tied to username**/
+    *user_out = NULL;
+
+    for(int i = 0; i < NUM_USERS; i++)
+    {
+        if(strcasecmp(users[i].name, username) == 0)
+        {
+            *user_out = &users[i];
+            break;
+        }
+    }
+
+    /**
+     * Return failure if username not found.
+     */
+    if(*user_out == NULL)
+    {
+        return;
+    }
+
+    debugPrintf("User \"%s\" found", (*user_out)->name);
 
     while(true){}
 
