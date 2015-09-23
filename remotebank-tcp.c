@@ -137,6 +137,12 @@ void authenticate(int commSocket, char *user, char *pass)
     challenge_buffer[CHALLENGE_SIZE] = '\0';
     debugPrintf("Challenge received: %s\n", challenge_buffer);
 
+    /**force username to all lower*/
+    for(int i = 0; i < strlen(user); i++)
+    {
+        user[i] = tolower(user[i]);
+    }
+
 
     /**Hash user + pass + challenge**/
     int preHashSize = strlen(user) + strlen(pass) + CHALLENGE_SIZE + 1;

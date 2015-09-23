@@ -8,13 +8,6 @@ void authenticate(int, bank_user**);
 
 bank_user users[NUM_USERS];
 
-typedef struct
-{
-    char challenge[CHALLENGE_SIZE] ;
-    long expirationTime;
-
-} challenge_t;
-
 /**
  * TCP banking server. Allows user to deposit, withdraw
  * and check balance. Serves remotebank-tcp programs.
@@ -127,11 +120,9 @@ void authenticate(int commSocket, bank_user **user_out)
     clock_gettime(CLOCK_REALTIME, &spec);
     long ms = round(spec.tv_nsec / 1.0e6); // Convert nanoseconds to milliseconds
 
-    challenge_t challenge;
-    memcpy(challenge.challenge, randomString, CHALLENGE_SIZE);
-    challenge.expirationTime = ms + CHALLENGE_TIMEOUT;
+    long challengeExpirationTime = ms + CHALLENGE_TIMEOUT;
 
-    debugPrintf("Challenge sent. Expires at: %ld\n", challenge.expirationTime);
+    debugPrintf("Challenge sent. Expires at: %ld\n", challengeExpirationTime);
     debugPrintf("Awaiting response . . .\n");
 
     /**Recv size of incoming username**/
@@ -200,13 +191,13 @@ void authenticate(int commSocket, bank_user **user_out)
     debugPrintf("Hashed result: %#x\n", hash);
 
     /**Get password (stored in memory) tied to username**/
-    *user_out = NULL;
+    bank_user *user = NULL;
 
     for(int i = 0; i < NUM_USERS; i++)
     {
         if(strcasecmp(users[i].name, username) == 0)
         {
-            *user_out = &users[i];
+            user = &users[i];
             break;
         }
     }
@@ -214,16 +205,27 @@ void authenticate(int commSocket, bank_user **user_out)
     /**
      * Return failure if username not found.
      */
-    if(*user_out == NULL)
+    if(user == NULL)
     {
+        *user_out = NULL;
         return;
     }
 
-    debugPrintf("User \"%s\" found", (*user_out)->name);
+    debugPrintf("User \"%s\" found\n", user->name);
 
-    while(true){}
+    debugPrintf("Computing md5 hash\n");
 
-    //compare md5 hash
+    /**Compute md5 hash**/
+
+    int preHashSize = strlen(user->name) + strlen(user->password) + CHALLENGE_SIZE + 1;
+    char preHash[preHashSize];
+
+    memcpy(preHash, user->name, strlen(user->name));
+    memcpy(&preHash[strlen(user->name)], user->password, strlen(user->password));
+    memcpy(&preHash[strlen(user->name) + strlen(user->password)], randomString, CHALLENGE_SIZE);
+    preHash[preHashSize - 1] = '\0';
+
+    debugPrintf("Pre-hashed string: %s\n", preHash);
 
     //if same, output corresponding user
 

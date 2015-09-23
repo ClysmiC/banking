@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <limits.h>
 #include <time.h>
+#include <ctype.h>
 
 #include <sys/socket.h>
 #include <arpa/inet.h>
@@ -66,15 +67,15 @@ void debugPrintf(char *fstring, ...)
 
 void initUsers(bank_user *users)
 {
-	users[0].name = "Andrew";
+	users[0].name = "andrew";
 	users[0].password = "bankpw";
 	users[0].balance = 250.00;
 
-	users[1].name = "DrEvil";
+	users[1].name = "drevil";
 	users[1].password = "minime123";
 	users[1].balance = 367.00;
 
-	users[2].name = "WilliamGates";
+	users[2].name = "williamgates";
 	users[2].password = "microsoft";
 	users[2].balance = 100000.00;
 
