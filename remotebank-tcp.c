@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
+#include <limits.h>
 
 #include <sys/socket.h>
 #include <arpa/inet.h>
@@ -60,7 +61,13 @@ int main(int argc, char *argv[])
 	char argumentPortStr[portStrLength + 1];
 	memcpy(argumentPortStr, &argv[1][colonPosition + 1], portStrLength);
 	argumentPortStr[portStrLength - 1] = '\0';
-	unsigned short serverPort = atoi(argumentPortStr); //parses to int
+
+	int serverPortAsInt = atoi(argumentPortStr); //parses to int
+	if(serverPortAsInt > USHRT_MAX) {
+		dieWithError("Invalid port number.");
+	}
+
+	unsigned short serverPort = (unsigned short)serverPortAsInt;
 
 	debugPrintf("IP: %s, Port: %d\n", serverIp, serverPort);
 
