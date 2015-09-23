@@ -1,120 +1,129 @@
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-#include <stdbool.h>
-#include <limits.h>
-
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <unistd.h>
-#include <stdarg.h>
-
 #include "banking.h"
 
-typedef struct sockaddr_in socket_address;
 
-void dieWithError(char *error);
-void debugPrintf(char *fstring, ...);
+void authenticate(int socket, char *user, char *pass);
 
-bool debugMode = false;
 
+/**
+ * TCP banking client. Allows user to deposit, withdraw
+ * and check balance. Must interact with a server-tcp program.
+ * Skeleton code taken from TCP/IP Sockets in C by Donahoo
+ * and Calvert.
+ *
+ */
 int main(int argc, char *argv[])
 {
-	/**Ensure proper # of command line args**/
-	if (argc != 6 && argc != 7)
-	{
-		dieWithError("Usage: remotebank-tcp.c <Server IP>:<Port> <Username> <Password> <Transaction Type> <Transaction Amount> [-d]");
-	}
+    /**Ensure proper command line args**/
+    if (argc != 6 && argc != 7)
+    {
+        dieWithError("Usage: remotebank-tcp.c <Server IP>:<Port> <Username> <Password> <Transaction Type> <Transaction Amount> [-d]");
+    }
 
-	if (argc == 7 && strcmp(argv[6], "-d") == 0)
-	{
-		debugMode = true;
-	}
-
-
-	/**Get position of colon within first argument**/
-	int clientSocket;
-	socket_address serverAddress;
-
-	char *colon = strchr(argv[1], ':');
-	int colonPosition = colon - argv[1];
-
-	if(colonPosition > 15)
-	{
-		dieWithError("Invalid IP address. Please use dotted quad notation.");
-	}
+    if (argc == 7)
+    {
+        if(strcmp(argv[6], "-d") == 0)
+        {
+            debugMode = true;
+        }
+        else
+        {
+            dieWithError("Usage: remotebank-tcp.c <Server IP>:<Port> <Username> <Password> <Transaction Type> <Transaction Amount> [-d]");
+        }
+    }
 
 
-	/**Substring first argument into IP and Port**/
+    /**Get position of colon within first argument**/
+    char *colon = strchr(argv[1], ':');
+    int colonPosition = colon - argv[1];
 
-	/**IP**/
-	char serverIp[colonPosition + 1]; //+1 for \0 character
-
-	memcpy(serverIp, &argv[1][0], colonPosition);
-	serverIp[colonPosition] = '\0';
-
-	if(((int)inet_addr(serverIp)) < 0)
-		dieWithError("Invalid IP address. Please use dotted quad notation.");
-
-	/**PORT**/
-	int portStrLength = strlen(argv[1]) - colonPosition;
-	char argumentPortStr[portStrLength + 1];
-	memcpy(argumentPortStr, &argv[1][colonPosition + 1], portStrLength);
-	argumentPortStr[portStrLength - 1] = '\0';
-
-	int serverPortAsInt = atoi(argumentPortStr); //parses to int
-	if(serverPortAsInt > USHRT_MAX) {
-		dieWithError("Invalid port number.");
-	}
-
-	unsigned short serverPort = (unsigned short)serverPortAsInt;
-
-	debugPrintf("IP: %s, Port: %d\n", serverIp, serverPort);
+    if(colonPosition > 15)
+    {
+        dieWithError("Invalid IP address. Please use dotted quad notation.");
+    }
 
 
+    /**Substring first argument into IP and Port**/
 
-	/**Create socket**/
+    /**IP**/
+    char serverIp[colonPosition + 1]; //+1 for \0 character
 
-	//TPPROTO_TCP for third argument not working on my windows machine. Using 0 (default) instead.
-	if((clientSocket = socket(PF_INET, SOCK_STREAM, 0)) < 0)
-	{
-		dieWithError("socket(...) failed");
-	}
-	debugPrintf("TCP socket created. File descriptor: %d\n", clientSocket);
+    memcpy(serverIp, &argv[1][0], colonPosition);
+    serverIp[colonPosition] = '\0';
 
-	//construct server address structure
-	memset(&serverAddress, 0, sizeof(serverAddress)); //zero out
-	serverAddress.sin_family = AF_INET;
-	serverAddress.sin_addr.s_addr = inet_addr(serverIp);
-	serverAddress.sin_port = htons(serverPort);
+    if(((int)inet_addr(serverIp)) < 0)
+        dieWithError("Invalid IP address. Please use dotted quad notation.");
 
-	debugPrintf("Connecting to %s:%d . . .\n", serverIp, serverPort);
+    /**PORT**/
+    int portStrLength = strlen(argv[1]) - colonPosition;
+    char argumentPortStr[portStrLength + 1];
+    memcpy(argumentPortStr, &argv[1][colonPosition + 1], portStrLength);
+    argumentPortStr[portStrLength - 1] = '\0';
 
-	//establish connection
-	if(connect(clientSocket, (struct sockaddr *)&serverAddress, sizeof(serverAddress)) < 0)
-	{
-		dieWithError("connect(...) failed.");
-	}
+    int serverPortAsInt = atoi(argumentPortStr); //parses to int
+    if(serverPortAsInt > USHRT_MAX) {
+        dieWithError("Invalid port number.");
+    }
 
-	debugPrintf("Connection successful");
+    unsigned short serverPort = (unsigned short)serverPortAsInt;
+
+    debugPrintf("IP: %s, Port: %d\n", serverIp, serverPort);
+
+
+
+    /**Create socket**/ 
+    int commSocket;
+
+    if((commSocket = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0)
+    {
+        dieWithError("socket(...) failed");
+    }
+    debugPrintf("TCP socket created. File descriptor: %d\n", commSocket);
+
+    /**Fill out address structure for server address**/
+    socket_address serverAddress;
+
+    memset(&serverAddress, 0, sizeof(serverAddress)); //zero out
+    serverAddress.sin_family = AF_INET;
+    serverAddress.sin_addr.s_addr = inet_addr(serverIp);
+    serverAddress.sin_port = htons(serverPort);
+
+    debugPrintf("Connecting to %s:%d . . .\n", serverIp, serverPort);
+
+    //establish connection
+    if(connect(commSocket, (struct sockaddr *)&serverAddress, sizeof(serverAddress)) < 0)
+    {
+        dieWithError("connect(...) failed.");
+    }
+
+    debugPrintf("Connection successful\n");
+
+    socket_address clientAddress;
+    int address_size = sizeof(clientAddress);
+    getsockname(commSocket, (struct sockaddr *)&clientAddress, &address_size);
+
+    debugPrintf("Client is on %s:%d\n", inet_ntoa(clientAddress.sin_addr), clientAddress.sin_port);
+
+    authenticate(commSocket, argv[2], argv[3]);
 }
 
-void dieWithError(char *error)
+void authenticate(int commSocket, char *user, char *pass)
 {
-	fflush(stdout);
-	printf("%s\n", error);
-	fflush(stdout);
-	exit(1);
-}
+    int totalBytes = 0;
+    char challenge_buffer[CHALLENGE_SIZE + 1];
 
-void debugPrintf(char *fstring, ...)
-{
-	if(!debugMode)
-		return;
+    debugPrintf("Begin receiving challenge\n");
 
-	va_list args;
-    va_start(args, fstring);
-    vprintf(fstring, args);
-    va_end(args);
-    fflush(stdout);
+    while(totalBytes < CHALLENGE_SIZE)
+    {
+        int received;
+        if((received = recv(commSocket, challenge_buffer, CHALLENGE_SIZE - totalBytes, 0)) <= 0)
+            dieWithError("recv(...) failed.");
+
+        totalBytes += received;
+        debugPrintf("Received %d bytes\n", received);
+    }
+
+    challenge_buffer[CHALLENGE_SIZE] = '\0';
+
+    debugPrintf("Challenge received: %s\n", challenge_buffer);
 }
