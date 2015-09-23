@@ -1,8 +1,6 @@
 #include "banking.h"
 #include "md5.h"
 
-#define CHALLENGE_SIZE 64
-#define CHALLENGE_TIMEOUT 10000
 
 void generateRandomString(char*, const int);
 void authenticate(int, bank_user*);
@@ -109,16 +107,16 @@ int main(int argc, char *argv[])
 
 void authenticate(int commSocket, bank_user* user_out)
 {
-    //send challenge
+    /**send challenge**/
     char randomString[CHALLENGE_SIZE + 1];
     generateRandomString(randomString, CHALLENGE_SIZE);
     randomString[CHALLENGE_SIZE] = '\0';
-    
+
     debugPrintf("Sending challenge: %s\n", randomString);
 
     send(commSocket, randomString, sizeof(randomString), 0);
 
-    //record time that challenge expires
+    /**record time that challenge expires**/
     struct timespec spec;
     clock_gettime(CLOCK_REALTIME, &spec);
     long ms = round(spec.tv_nsec / 1.0e6); // Convert nanoseconds to milliseconds
@@ -128,10 +126,75 @@ void authenticate(int commSocket, bank_user* user_out)
     challenge.expirationTime = ms + CHALLENGE_TIMEOUT;
 
     debugPrintf("Challenge sent. Expires at: %ld\n", challenge.expirationTime);
-    debugPrintf("Awaiting response.\n");
+    debugPrintf("Awaiting response . . .\n");
 
-    //recv response
+    /**Recv size of incoming username**/
+    int totalBytes = 0;
+    int BYTES_TO_RECEIVE = sizeof(int);
+    int usernameLength;
+    char usernameLengthBuffer[4];
 
+    debugPrintf("Receiving username length . . .\n");
+
+    while(totalBytes < BYTES_TO_RECEIVE)
+    {
+        int received;
+        if((received = recv(commSocket, &usernameLengthBuffer[totalBytes], BYTES_TO_RECEIVE - totalBytes, 0)) < 0)
+            dieWithError("Failed receiving username length");
+
+        totalBytes += received;
+        debugPrintf("Received %d bytes\n", received);
+    }
+
+    usernameLength = (int)(*(int*)usernameLengthBuffer);
+
+    debugPrintf("Username length: %d\n", usernameLength);
+
+    debugPrintf("Receiving username . . .\n");
+
+    /**Recv incoming username**/
+    totalBytes = 0;
+    BYTES_TO_RECEIVE = usernameLength;
+    char username[BYTES_TO_RECEIVE + 1];
+
+    while(totalBytes < BYTES_TO_RECEIVE)
+    {
+        int received;
+        if((received = recv(commSocket, &username[totalBytes], BYTES_TO_RECEIVE - totalBytes, 0)) < 0)
+            dieWithError("Failed receiving username");
+
+        totalBytes += received;
+        debugPrintf("Received %d bytes\n", received);
+    }
+
+    username[BYTES_TO_RECEIVE] = '\0';
+
+    debugPrintf("Username: %s\n", username);
+
+    debugPrintf("Receiving md5 hash . . .\n");
+
+    /**Recv incoming hash**/
+    totalBytes = 0;
+    BYTES_TO_RECEIVE = sizeof(unsigned int);
+    char hashBuffer[BYTES_TO_RECEIVE];
+    unsigned int hash;
+
+    while(totalBytes < BYTES_TO_RECEIVE)
+    {
+        int received;
+        if((received = recv(commSocket, &hashBuffer[totalBytes], BYTES_TO_RECEIVE - totalBytes, 0)) < 0)
+            dieWithError("Failed receiving md5 hash");
+
+        totalBytes += received;
+        debugPrintf("Received %d bytes\n", received);
+    }
+
+    hash = (unsigned int)(*(unsigned int *)hashBuffer);
+
+    debugPrintf("Hashed result: %#x\n", hash);
+
+
+    while(true){}
 
     //compare md5 hash
 
@@ -143,6 +206,11 @@ void authenticate(int commSocket, bank_user* user_out)
 
 void generateRandomString(char *s, const int len)
 {
+   time_t t;
+   
+   /* Intializes random number generator */
+   srand((unsigned) time(&t));
+
     static const char alphanum[] =
         "0123456789"
         "ABCDEFGHIJKLMNOPQRSTUVWXYZ"

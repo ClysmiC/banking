@@ -118,6 +118,7 @@ int main(int argc, char *argv[])
 
 void authenticate(int commSocket, char *user, char *pass)
 {
+    /**Receive challenge**/
     int totalBytes = 0;
     char challenge_buffer[CHALLENGE_SIZE + 1];
 
@@ -126,7 +127,7 @@ void authenticate(int commSocket, char *user, char *pass)
     while(totalBytes < CHALLENGE_SIZE)
     {
         int received;
-        if((received = recv(commSocket, challenge_buffer, CHALLENGE_SIZE - totalBytes, 0)) <= 0)
+        if((received = recv(commSocket, &challenge_buffer[totalBytes], CHALLENGE_SIZE - totalBytes, 0)) <= 0)
             dieWithError("recv(...) failed.");
 
         totalBytes += received;
@@ -136,6 +137,8 @@ void authenticate(int commSocket, char *user, char *pass)
     challenge_buffer[CHALLENGE_SIZE] = '\0';
     debugPrintf("Challenge received: %s\n", challenge_buffer);
 
+
+    /**Hash user + pass + challenge**/
     int preHashSize = strlen(user) + strlen(pass) + CHALLENGE_SIZE + 1;
     char preHash[preHashSize];
     memcpy(preHash, user, strlen(user));
@@ -148,4 +151,15 @@ void authenticate(int commSocket, char *user, char *pass)
     unsigned int result = *md5(preHash, strlen(preHash));
 
     debugPrintf("Hashed result: %#x", result);
+
+    /**
+        Send length of username to server, so it knows how long
+        to recv when reading username.
+        Then send the username itself.
+        Then send hashed result (fixed length) to server
+    **/
+    int usernameLength = strlen(user);
+    send(commSocket, &usernameLength, sizeof(int), 0);
+    send(commSocket, user, usernameLength, 0);
+    send(commSocket, &result, sizeof(result), 0);
 }

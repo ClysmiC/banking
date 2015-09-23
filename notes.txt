@@ -1,0 +1,3 @@
+assumes both computers have same size of unsigned ints, etc.
+uses md5 from rosetta
+copies skeleton of much of the code from D and C

@@ -20,6 +20,7 @@
 #define RESPONSE_INSUFFICIENT_FUNDS 1
 
 #define CHALLENGE_SIZE 64
+#define CHALLENGE_TIMEOUT 10000
 
 typedef struct sockaddr_in socket_address;
 
