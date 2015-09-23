@@ -88,19 +88,19 @@ int main(int argc, char *argv[])
         debugPrintf("Handling client %s:%d\n", inet_ntoa(clientAddress.sin_addr), clientAddress.sin_port);
         debugPrintf("Socket file descriptor: %d\n", commSocket);
 
-        bank_user *authenticatedUser;
-        authenticate(commSocket, &authenticatedUser);
+        bank_user *authUser;
+        authenticate(commSocket, &authUser);
 
 
-        if(authenticatedUser == NULL)
+        if(authUser == NULL)
         {
-            // printf("Failed authentication attempt.");
+            printf("***Failed authentication attempt***\n");
             close(commSocket);
-            debugPrintf("Closing client socket.\n");
+            debugPrintf("Closing client socket.\n\nWaiting for next request\n\n");
+            continue;
         }
-        else
-        {
-        }
+
+        debugPrintf("Authenticated as %s:%s\n", authUser->name, authUser->password);
     }
 }
 
@@ -213,8 +213,6 @@ void authenticate(int commSocket, bank_user **user_out)
 
     debugPrintf("User \"%s\" found\n", user->name);
 
-    debugPrintf("Computing md5 hash\n");
-
     /**Compute md5 hash**/
 
     int preHashSize = strlen(user->name) + strlen(user->password) + CHALLENGE_SIZE + 1;
@@ -227,10 +225,19 @@ void authenticate(int commSocket, bank_user **user_out)
 
     debugPrintf("Pre-hashed string: %s\n", preHash);
 
-    //if same, output corresponding user
+    /**compute md5 hash**/
+    unsigned int result = *md5(preHash, strlen(preHash));
 
-    //else output null
-    user_out = NULL;
+    debugPrintf("Hashed result: %#x\n", result);
+
+    if(result != hash)
+    {
+        *user_out = NULL;
+        return;
+    }
+
+    *user_out = user;
+    return;
 }
 
 void generateRandomString(char *s, const int len)
