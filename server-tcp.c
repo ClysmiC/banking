@@ -20,7 +20,7 @@ int main(int argc, char *argv[])
 {
     /**Ensure proper command line args**/
     if (argc != 2 && argc != 3)
-        dieWithError("Usage: server-tcp <Port>");
+        dieWithError("Usage: server-tcp <Port> [-d]");
 
     if (argc == 3)
     {
@@ -29,7 +29,7 @@ int main(int argc, char *argv[])
             debugMode = true;
         }
         else
-            dieWithError("Usage: server-tcp <Port>");
+            dieWithError("Usage: server-tcp <Port> [-d]");
     }
 
 
@@ -204,7 +204,7 @@ void authenticate(int commSocket, bank_user **user_out)
 
     hash = (unsigned int)(*(unsigned int *)hashBuffer);
 
-    debugPrintf("Hashed result: %#x\n", hash);
+    debugPrintf("Hashed received: %#x\n", hash);
 
     /**Make sure challenge isn't expired**/
     clock_gettime(CLOCK_REALTIME, &spec);

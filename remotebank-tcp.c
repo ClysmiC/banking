@@ -18,7 +18,7 @@ int main(int argc, char *argv[])
     /**Ensure proper command line args**/
     if (argc != 6 && argc != 7)
     {
-        dieWithError("Usage: remotebank-tcp.c <Server IP>:<Port> <Username> <Password> <Transaction Type> <Transaction Amount> [-d]");
+        dieWithError("Usage: remotebank-tcp <Server IP>:<Port> <Username> <Password> <Transaction Type> <Transaction Amount> [-d]");
     }
 
     if (argc == 7)
@@ -29,7 +29,7 @@ int main(int argc, char *argv[])
         }
         else
         {
-            dieWithError("\nUsage: remotebank-tcp.c <Server IP>:<Port> <Username> <Password> <Transaction Type> <Transaction Amount> [-d]\n");
+            dieWithError("\nUsage: remotebank-tcp <Server IP>:<Port> <Username> <Password> <Transaction Type> <Transaction Amount> [-d]\n");
         }
     }
 
@@ -194,7 +194,7 @@ int main(int argc, char *argv[])
     updatedBalance = (*(double*)&responseBuffer[sizeof(int)]);
 
     /**PRINT RESULTS**/
-    debugPrintf("Response: %d -- Balance: $%.2f", response, updatedBalance);
+    debugPrintf("Response: %d -- Balance: $%.2f\n", response, updatedBalance);
 
     printf("\nWelcome to online banking, %s\n", argv[2]);
     
@@ -236,6 +236,8 @@ int main(int argc, char *argv[])
         }
     }
 
+    close(commSocket);
+    exit(0);
 }
 
 bool authenticate(int commSocket, char *user, char *pass)
