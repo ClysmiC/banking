@@ -36,18 +36,6 @@ typedef struct
     double balance;
 } bank_user;
 
-typedef struct 
-{
-    int type;
-    double amount;
-} transaction_request;
-
-typedef struct
-{
-    int response;
-    double updatedBalance;
-} transaction_response;
-
 void dieWithError(char *error)
 {
     fflush(stdout);

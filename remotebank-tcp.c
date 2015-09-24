@@ -142,36 +142,40 @@ int main(int argc, char *argv[])
     debugPrintf("Authentication successful\n");
 
     /** Fill out transaction request struct **/
-    transaction_request request;
+    int requestType;
+    double requestAmount;
 
     if(strcasecmp(argv[4], "deposit") == 0)
     {
-        request.type = TRANSACTION_DEPOSIT;
+        requestType = TRANSACTION_DEPOSIT;
     }
     else if(strcasecmp(argv[4], "withdraw") == 0)
     {
-        request.type = TRANSACTION_WITHDRAW;
+        requestType = TRANSACTION_WITHDRAW;
     }
     else if(strcasecmp(argv[4], "checkbal") == 0)
     {
-        request.type = TRANSACTION_CHECKBAL;
+        requestType = TRANSACTION_CHECKBAL;
     }
     else
     {
         dieWithError("Internal error processing request type.");
     }
 
-    request.amount = atof(argv[5]);
+    requestAmount = atof(argv[5]);
 
     /**Send transaction request**/
-    send(commSocket, &request, sizeof(request), 0);
+    send(commSocket, &requestType, sizeof(requestType), 0);
+    send(commSocket, &requestAmount, sizeof(requestAmount), 0);
 
-    debugPrintf("Sent request. Type: %d -- Amount: %.2f\n", request.type, request.amount);
+
+    debugPrintf("Sent request. Type: %d -- Amount: %.2f\n", requestType, requestAmount);
 
     /**Receive transaction response**/
     int totalBytes = 0;
-    int BYTES_TO_RECEIVE = sizeof(transaction_response);
-    transaction_response response;
+    int BYTES_TO_RECEIVE = sizeof(int) + sizeof(double);
+    int response;
+    double updatedBalance;
     char responseBuffer[BYTES_TO_RECEIVE];
 
     debugPrintf("Receiving transaction response . . .\n");
@@ -186,9 +190,52 @@ int main(int argc, char *argv[])
         debugPrintf("Received %d bytes\n", received);
     }
 
-    response = *((transaction_response*)responseBuffer);
+    response = (*(int*)responseBuffer);
+    updatedBalance = (*(double*)&responseBuffer[sizeof(int)]);
 
-    debugPrintf("Response: %d -- Balance: $%.2f", response.response, response.updatedBalance);
+    /**PRINT RESULTS**/
+    debugPrintf("Response: %d -- Balance: $%.2f", response, updatedBalance);
+
+    printf("\nWelcome to online banking, %s\n", argv[2]);
+    
+    if(requestType == TRANSACTION_DEPOSIT)
+    {
+        if(response == RESPONSE_SUCCESS)
+        {
+            printf("Deposit of $%.2f successful. New balance: %.2f\n", requestAmount, updatedBalance);
+        }
+        else if(response == RESPONSE_INVALID_REQUEST)
+        {
+            printf("Invalid deposit request\n");
+        }
+    }
+    else if(requestType == TRANSACTION_WITHDRAW)
+    {
+        if(response == RESPONSE_SUCCESS)
+        {
+            printf("Withdrawal of $%.2f successful. New balance: %.2f\n", requestAmount, updatedBalance);
+        }
+        else if(response == RESPONSE_INSUFFICIENT_FUNDS)
+        {
+            printf("Insufficient funds to withdraw $%.2f. Balance remains at $%.2f\n", requestAmount, updatedBalance);
+        }
+        else   
+        {
+            printf("Invalid withdraw request\n");
+        }
+    }
+    else if(requestType == TRANSACTION_CHECKBAL)
+    {
+        if(response == RESPONSE_SUCCESS)
+        {
+            printf("Your balance is %.2f\n", updatedBalance);
+        }
+        else if(response == RESPONSE_INVALID_REQUEST)
+        {
+            printf("Invalid checkbal request\n");
+        }
+    }
+
 }
 
 bool authenticate(int commSocket, char *user, char *pass)
@@ -196,10 +243,11 @@ bool authenticate(int commSocket, char *user, char *pass)
     /**Receive challenge**/
     int totalBytes = 0;
     char challenge_buffer[CHALLENGE_SIZE + 1];
+    int BYTES_TO_RECEIVE = CHALLENGE_SIZE;
 
     debugPrintf("Begin receiving challenge\n");
 
-    while(totalBytes < CHALLENGE_SIZE)
+    while(totalBytes < BYTES_TO_RECEIVE)
     {
         int received;
         if((received = recv(commSocket, &challenge_buffer[totalBytes], CHALLENGE_SIZE - totalBytes, 0)) <= 0)
@@ -250,7 +298,7 @@ bool authenticate(int commSocket, char *user, char *pass)
     totalBytes = 0;
     char authResponseBuffer[sizeof(int)];
     int authResponse;
-    int BYTES_TO_RECEIVE = sizeof(int);
+    BYTES_TO_RECEIVE = sizeof(int);
 
     while(totalBytes < BYTES_TO_RECEIVE)
     {
@@ -263,6 +311,8 @@ bool authenticate(int commSocket, char *user, char *pass)
     }
 
     authResponse = (*(int*)authResponseBuffer);
+
+    debugPrintf("AuthResponse: %d\n", authResponse);
 
 
     if(authResponse == AUTH_SUCCESS)

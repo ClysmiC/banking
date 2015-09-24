@@ -129,7 +129,7 @@ void authenticate(int commSocket, bank_user **user_out)
 
     debugPrintf("Sending challenge: %s\n", randomString);
 
-    send(commSocket, randomString, sizeof(randomString), 0);
+    send(commSocket, randomString, strlen(randomString), 0);
 
     /**record time that challenge expires**/
     struct timespec spec;
@@ -270,8 +270,9 @@ void handleRequest(int commSocket, bank_user *user)
 {
     /**Receive request information**/
     int totalBytes = 0;
-    int BYTES_TO_RECEIVE = sizeof(transaction_request);
-    transaction_request request;
+    int BYTES_TO_RECEIVE = sizeof(int) + sizeof(double);
+    int requestType;
+    double requestAmount;
     char requestBuffer[BYTES_TO_RECEIVE];
 
     debugPrintf("Receiving transaction request . . .\n");
@@ -286,67 +287,69 @@ void handleRequest(int commSocket, bank_user *user)
         debugPrintf("Received %d bytes\n", received);
     }
 
-    request = *((transaction_request*)requestBuffer);
-    debugPrintf("Received request. Type: %d -- Amount: %.2f\n", request.type, request.amount);
+    requestType = *((int*)requestBuffer);
+    requestAmount = *((double*)&requestBuffer[sizeof(int)]);
+    debugPrintf("Received request. Type: %d -- Amount: %.2f\n", requestType, requestAmount);
 
     /**Handle request**/
-    transaction_response response;
+    int response;
+    double updatedBalance;
 
-    if(request.type == TRANSACTION_DEPOSIT)
+    if(requestType == TRANSACTION_DEPOSIT)
     {
-        if(request.amount > 0)
+        if(requestAmount > 0)
         {
-            user->balance += request.amount;
-            response.response = RESPONSE_SUCCESS;
-            response.updatedBalance = user->balance;
+            user->balance += requestAmount;
+            response = RESPONSE_SUCCESS;
+            updatedBalance = user->balance;
 
-            printf("%s deposited $%.2f -- Balance: %.2f\n", user->name, request.amount, user->balance);
+            printf("%s deposited $%.2f -- Balance: %.2f\n", user->name, requestAmount, user->balance);
             fflush(stdout);
         }
         else
         {
-            response.response = RESPONSE_INVALID_REQUEST;
-            response.updatedBalance = user->balance;
+            response = RESPONSE_INVALID_REQUEST;
+            updatedBalance = user->balance;
 
             printf("%s attempted to deposit a non-positive value. Denied.\n", user->name);
             fflush(stdout);
         }
     }
-    else if(request.type == TRANSACTION_WITHDRAW)
+    else if(requestType == TRANSACTION_WITHDRAW)
     {
-        if(request.amount > 0)
+        if(requestAmount > 0)
         {
-            if(user->balance >= request.amount)
+            if(user->balance >= requestAmount)
             {
-                user->balance -= request.amount;
-                response.response = RESPONSE_SUCCESS;
-                response.updatedBalance = user->balance;
+                user->balance -= requestAmount;
+                response = RESPONSE_SUCCESS;
+                updatedBalance = user->balance;
 
-                printf("%s withdrew $%.2f -- Balance: %.2f\n", user->name, request.amount, user->balance);
+                printf("%s withdrew $%.2f -- Balance: %.2f\n", user->name, requestAmount, user->balance);
                 fflush(stdout);
             }
             else
             {
-                response.response = RESPONSE_INSUFFICIENT_FUNDS;
-                response.updatedBalance = user->balance;
+                response = RESPONSE_INSUFFICIENT_FUNDS;
+                updatedBalance = user->balance;
 
-                printf("%s attempted to withdraw %.2f, but has an insufficient balance of %.2f\n", user->name, request.amount, user->balance);
+                printf("%s attempted to withdraw %.2f, but has an insufficient balance of %.2f\n", user->name, requestAmount, user->balance);
                 fflush(stdout);
             }
         }
         else
         {
-            response.response = RESPONSE_INVALID_REQUEST;
-            response.updatedBalance = user->balance;
+            response = RESPONSE_INVALID_REQUEST;
+            updatedBalance = user->balance;
 
             printf("%s attempted to withdraw a non-positive value. Denied.\n", user->name);
             fflush(stdout);
         }
     }
-    else if(request.type == TRANSACTION_CHECKBAL)
+    else if(requestType == TRANSACTION_CHECKBAL)
     {
-        response.response = RESPONSE_SUCCESS;
-        response.updatedBalance = user->balance;
+        response = RESPONSE_SUCCESS;
+        updatedBalance = user->balance;
 
         printf("%s checked balance -- Balance: %.2f\n", user->name, user->balance);
         fflush(stdout);
@@ -354,13 +357,14 @@ void handleRequest(int commSocket, bank_user *user)
     else
     {
         //only will get here if server sends a non-valid request type
-        response.response = RESPONSE_INVALID_REQUEST;
-        response.updatedBalance = user->balance;
+        response = RESPONSE_INVALID_REQUEST;
+        updatedBalance = user->balance;
     }
 
-    send(commSocket, &response, sizeof(transaction_response), 0);
+    send(commSocket, &response, sizeof(response), 0);
+    send(commSocket, &updatedBalance, sizeof(updatedBalance), 0);
 
-    debugPrintf("Sent response: %d -- Updated Balance: %.2f\n", response.response, response.updatedBalance);
+    debugPrintf("Sent response: %d -- Updated Balance: %.2f\n", response, updatedBalance);
 }
 
 void generateRandomString(char *s, const int len)
