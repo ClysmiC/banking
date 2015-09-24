@@ -5,6 +5,7 @@
 
 void generateRandomString(char*, const int);
 void authenticate(int, bank_user**);
+void handleRequest(int, bank_user*);
 
 bank_user users[NUM_USERS];
 
@@ -82,25 +83,40 @@ int main(int argc, char *argv[])
 
         memset(&clientAddress, 0, sizeof(clientAddress));
 
+        /**Accept socket**/
         if((commSocket = accept(serverSocket, (struct sockaddr *)&clientAddress, &clientLength)) < 0)
             dieWithError("accept(...) failed.");
 
-        debugPrintf("Handling client %s:%d\n", inet_ntoa(clientAddress.sin_addr), clientAddress.sin_port);
+        debugPrintf("\nHandling client %s:%d\n", inet_ntoa(clientAddress.sin_addr), clientAddress.sin_port);
         debugPrintf("Socket file descriptor: %d\n", commSocket);
 
+        /**Authenticate user**/
         bank_user *authUser;
         authenticate(commSocket, &authUser);
 
+        int authResponse;
 
         if(authUser == NULL)
         {
+            /**Authentication fail**/
             printf("***Failed authentication attempt***\n");
+            authResponse = AUTH_FAIL;
+            send(commSocket, &authResponse, sizeof(authResponse), 0);
+
             close(commSocket);
             debugPrintf("Closing client socket.\n\nWaiting for next request\n\n");
             continue;
         }
 
+        /**Authentication success**/
+        /**send response packet**/
         debugPrintf("Authenticated as %s:%s\n", authUser->name, authUser->password);
+        authResponse = AUTH_SUCCESS;
+        send(commSocket, &authResponse, sizeof(authResponse), 0);
+
+
+        handleRequest(commSocket, authUser);
+        close(commSocket);
     }
 }
 
@@ -129,7 +145,7 @@ void authenticate(int commSocket, bank_user **user_out)
     int totalBytes = 0;
     int BYTES_TO_RECEIVE = sizeof(int);
     int usernameLength;
-    char usernameLengthBuffer[4];
+    char usernameLengthBuffer[sizeof(int)];
 
     debugPrintf("Receiving username length . . .\n");
 
@@ -143,7 +159,7 @@ void authenticate(int commSocket, bank_user **user_out)
         debugPrintf("Received %d bytes\n", received);
     }
 
-    usernameLength = (int)(*(int*)usernameLengthBuffer);
+    usernameLength = (*(int*)usernameLengthBuffer);
 
     debugPrintf("Username length: %d\n", usernameLength);
 
@@ -189,6 +205,16 @@ void authenticate(int commSocket, bank_user **user_out)
     hash = (unsigned int)(*(unsigned int *)hashBuffer);
 
     debugPrintf("Hashed result: %#x\n", hash);
+
+    /**Make sure challenge isn't expired**/
+    clock_gettime(CLOCK_REALTIME, &spec);
+    ms = round(spec.tv_nsec / 1.0e6);
+
+    if(ms > challengeExpirationTime)
+    {
+        *user_out = NULL;
+        return;
+    }
 
     /**Get password (stored in memory) tied to username**/
     bank_user *user = NULL;
@@ -238,6 +264,103 @@ void authenticate(int commSocket, bank_user **user_out)
 
     *user_out = user;
     return;
+}
+
+void handleRequest(int commSocket, bank_user *user)
+{
+    /**Receive request information**/
+    int totalBytes = 0;
+    int BYTES_TO_RECEIVE = sizeof(transaction_request);
+    transaction_request request;
+    char requestBuffer[BYTES_TO_RECEIVE];
+
+    debugPrintf("Receiving transaction request . . .\n");
+
+    while(totalBytes < BYTES_TO_RECEIVE)
+    {
+        int received;
+        if((received = recv(commSocket, &requestBuffer[totalBytes], BYTES_TO_RECEIVE - totalBytes, 0)) < 0)
+            dieWithError("Failed receiving transaction request");
+
+        totalBytes += received;
+        debugPrintf("Received %d bytes\n", received);
+    }
+
+    request = *((transaction_request*)requestBuffer);
+    debugPrintf("Received request. Type: %d -- Amount: %.2f\n", request.type, request.amount);
+
+    /**Handle request**/
+    transaction_response response;
+
+    if(request.type == TRANSACTION_DEPOSIT)
+    {
+        if(request.amount > 0)
+        {
+            user->balance += request.amount;
+            response.response = RESPONSE_SUCCESS;
+            response.updatedBalance = user->balance;
+
+            printf("%s deposited $%.2f -- Balance: %.2f\n", user->name, request.amount, user->balance);
+            fflush(stdout);
+        }
+        else
+        {
+            response.response = RESPONSE_INVALID_REQUEST;
+            response.updatedBalance = user->balance;
+
+            printf("%s attempted to deposit a non-positive value. Denied.\n", user->name);
+            fflush(stdout);
+        }
+    }
+    else if(request.type == TRANSACTION_WITHDRAW)
+    {
+        if(request.amount > 0)
+        {
+            if(user->balance >= request.amount)
+            {
+                user->balance -= request.amount;
+                response.response = RESPONSE_SUCCESS;
+                response.updatedBalance = user->balance;
+
+                printf("%s withdrew $%.2f -- Balance: %.2f\n", user->name, request.amount, user->balance);
+                fflush(stdout);
+            }
+            else
+            {
+                response.response = RESPONSE_INSUFFICIENT_FUNDS;
+                response.updatedBalance = user->balance;
+
+                printf("%s attempted to withdraw %.2f, but has an insufficient balance of %.2f\n", user->name, request.amount, user->balance);
+                fflush(stdout);
+            }
+        }
+        else
+        {
+            response.response = RESPONSE_INVALID_REQUEST;
+            response.updatedBalance = user->balance;
+
+            printf("%s attempted to withdraw a non-positive value. Denied.\n", user->name);
+            fflush(stdout);
+        }
+    }
+    else if(request.type == TRANSACTION_CHECKBAL)
+    {
+        response.response = RESPONSE_SUCCESS;
+        response.updatedBalance = user->balance;
+
+        printf("%s checked balance -- Balance: %.2f\n", user->name, user->balance);
+        fflush(stdout);
+    }
+    else
+    {
+        //only will get here if server sends a non-valid request type
+        response.response = RESPONSE_INVALID_REQUEST;
+        response.updatedBalance = user->balance;
+    }
+
+    send(commSocket, &response, sizeof(transaction_response), 0);
+
+    debugPrintf("Sent response: %d -- Updated Balance: %.2f\n", response.response, response.updatedBalance);
 }
 
 void generateRandomString(char *s, const int len)

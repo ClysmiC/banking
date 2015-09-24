@@ -3,7 +3,7 @@
 
 
 
-void authenticate(int socket, char *user, char *pass);
+bool authenticate(int socket, char *user, char *pass);
 
 
 /**
@@ -29,16 +29,34 @@ int main(int argc, char *argv[])
         }
         else
         {
-            dieWithError("Usage: remotebank-tcp.c <Server IP>:<Port> <Username> <Password> <Transaction Type> <Transaction Amount> [-d]");
+            dieWithError("\nUsage: remotebank-tcp.c <Server IP>:<Port> <Username> <Password> <Transaction Type> <Transaction Amount> [-d]\n");
         }
     }
 
     char *name = argv[2];
     char *pass = argv[3];
 
+    //get rid of dumb quotation marks
+    if(name[0] == '\"')
+    {
+        name = &name[1];
+        name[strlen(name) - 1] = '\0';
+    }
+    if(pass[0] == '\"')
+    {
+        pass = &pass[1];
+        pass[strlen(pass) - 1] = '\0';
+    }
+
     if(strlen(name) > 30 || strlen(pass) > 30)
     {
-        dieWithError("Username/password must be max 30 characters.");
+        dieWithError("\nUsername/password must be max 30 characters.\n");
+    }
+
+    //ensure valid request type
+    if(strcasecmp(argv[4], "deposit") && strcasecmp(argv[4], "withdraw") && strcasecmp(argv[4], "checkbal"))
+    {
+        dieWithError("\nTransaction type must be one of the following:\n\tdeposit\n\twithdraw\n\tcheckbal\n");
     }
 
 
@@ -48,7 +66,7 @@ int main(int argc, char *argv[])
 
     if(colonPosition > 15)
     {
-        dieWithError("Invalid IP address. Please use dotted quad notation.");
+        dieWithError("\nInvalid IP address. Please use dotted quad notation.\n");
     }
 
 
@@ -61,7 +79,7 @@ int main(int argc, char *argv[])
     serverIp[colonPosition] = '\0';
 
     if(((int)inet_addr(serverIp)) < 0)
-        dieWithError("Invalid IP address. Please use dotted quad notation.");
+        dieWithError("\nInvalid IP address. Please use dotted quad notation.\n");
 
     /**PORT**/
     int portStrLength = strlen(argv[1]) - colonPosition;
@@ -71,7 +89,7 @@ int main(int argc, char *argv[])
 
     int serverPortAsInt = atoi(argumentPortStr); //parses to int
     if(serverPortAsInt > USHRT_MAX) {
-        dieWithError("Invalid port number.");
+        dieWithError("\nInvalid port number.\n");
     }
 
     unsigned short serverPort = (unsigned short)serverPortAsInt;
@@ -113,10 +131,67 @@ int main(int argc, char *argv[])
 
     debugPrintf("Client is on %s:%d\n", inet_ntoa(clientAddress.sin_addr), clientAddress.sin_port);
 
-    authenticate(commSocket, argv[2], argv[3]);
+    /** AUTHENTICATE! **/
+    if(!authenticate(commSocket, argv[2], argv[3]))
+    {
+        printf("Authentication failed\n");
+        close(commSocket);
+        exit(0);
+    }
+
+    debugPrintf("Authentication successful\n");
+
+    /** Fill out transaction request struct **/
+    transaction_request request;
+
+    if(strcasecmp(argv[4], "deposit") == 0)
+    {
+        request.type = TRANSACTION_DEPOSIT;
+    }
+    else if(strcasecmp(argv[4], "withdraw") == 0)
+    {
+        request.type = TRANSACTION_WITHDRAW;
+    }
+    else if(strcasecmp(argv[4], "checkbal") == 0)
+    {
+        request.type = TRANSACTION_CHECKBAL;
+    }
+    else
+    {
+        dieWithError("Internal error processing request type.");
+    }
+
+    request.amount = atof(argv[5]);
+
+    /**Send transaction request**/
+    send(commSocket, &request, sizeof(request), 0);
+
+    debugPrintf("Sent request. Type: %d -- Amount: %.2f\n", request.type, request.amount);
+
+    /**Receive transaction response**/
+    int totalBytes = 0;
+    int BYTES_TO_RECEIVE = sizeof(transaction_response);
+    transaction_response response;
+    char responseBuffer[BYTES_TO_RECEIVE];
+
+    debugPrintf("Receiving transaction response . . .\n");
+
+    while(totalBytes < BYTES_TO_RECEIVE)
+    {
+        int received;
+        if((received = recv(commSocket, &responseBuffer[totalBytes], BYTES_TO_RECEIVE - totalBytes, 0)) < 0)
+            dieWithError("Failed receiving transaction response");
+
+        totalBytes += received;
+        debugPrintf("Received %d bytes\n", received);
+    }
+
+    response = *((transaction_response*)responseBuffer);
+
+    debugPrintf("Response: %d -- Balance: $%.2f", response.response, response.updatedBalance);
 }
 
-void authenticate(int commSocket, char *user, char *pass)
+bool authenticate(int commSocket, char *user, char *pass)
 {
     /**Receive challenge**/
     int totalBytes = 0;
@@ -156,7 +231,7 @@ void authenticate(int commSocket, char *user, char *pass)
 
     unsigned int result = *md5(preHash, strlen(preHash));
 
-    debugPrintf("Hashed result: %#x", result);
+    debugPrintf("Hashed result: %#x\n", result);
 
     /**
         Send length of username to server, so it knows how long
@@ -168,4 +243,34 @@ void authenticate(int commSocket, char *user, char *pass)
     send(commSocket, &usernameLength, sizeof(int), 0);
     send(commSocket, user, usernameLength, 0);
     send(commSocket, &result, sizeof(result), 0);
+
+    debugPrintf("Hash sent\nAwaiting authentication\n");
+
+    /**Receive auth response**/
+    totalBytes = 0;
+    char authResponseBuffer[sizeof(int)];
+    int authResponse;
+    int BYTES_TO_RECEIVE = sizeof(int);
+
+    while(totalBytes < BYTES_TO_RECEIVE)
+    {
+        int received;
+        if((received = recv(commSocket, &authResponseBuffer[totalBytes], BYTES_TO_RECEIVE - totalBytes, 0)) <= 0)
+            dieWithError("recv(...) failed.");
+
+        totalBytes += received;
+        debugPrintf("Received %d bytes\n", received);
+    }
+
+    authResponse = (*(int*)authResponseBuffer);
+
+
+    if(authResponse == AUTH_SUCCESS)
+    {
+        return true;
+    }
+    else
+    {
+        return false;
+    }
 }
