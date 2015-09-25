@@ -132,11 +132,11 @@ void authenticate(int commSocket, bank_user **user_out)
     send(commSocket, randomString, strlen(randomString), 0);
 
     /**record time that challenge expires**/
-    struct timespec spec;
-    clock_gettime(CLOCK_REALTIME, &spec);
-    long ms = round(spec.tv_nsec / 1.0e6); // Convert nanoseconds to milliseconds
 
-    long challengeExpirationTime = ms + CHALLENGE_TIMEOUT;
+    time_t currTime;
+    time(&currTime);
+
+    long challengeExpirationTime = currTime + CHALLENGE_TIMEOUT;
 
     debugPrintf("Challenge sent. Expires at: %ld\n", challengeExpirationTime);
     debugPrintf("Awaiting response . . .\n");
@@ -207,10 +207,8 @@ void authenticate(int commSocket, bank_user **user_out)
     debugPrintf("Hashed received: %#x\n", hash);
 
     /**Make sure challenge isn't expired**/
-    clock_gettime(CLOCK_REALTIME, &spec);
-    ms = round(spec.tv_nsec / 1.0e6);
-
-    if(ms > challengeExpirationTime)
+    time(&currTime);
+    if(currTime > challengeExpirationTime)
     {
         *user_out = NULL;
         return;

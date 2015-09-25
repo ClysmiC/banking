@@ -11,19 +11,54 @@
 #include <unistd.h>
 #include <stdarg.h>
 
+
+
+/************UDP***************/
+#define UDP_TIMEOUT             2
+
+//udp message types
+#define REQ_CHALLENGE           1
+#define CHALLENGE               2
+#define REQ_TRANSACTION         4
+#define RESPONSE                8 
+
+//udp client states
+#define CHALL_REQUESTED         1
+#define TRANSACTION_REQUESTED   2
+#define RESPONSE_ACKED          4
+
+//udp server states
+#define CHALLENGE_SENT          1
+#define RESPONSE_SENT           2
+
+typedef struct
+{
+    int ip;
+    int port;
+    char challenge[64];
+    int auth;
+} client_state;
+
+
+/*******************************/
+
+//transaction types
 #define TRANSACTION_DEPOSIT     1
 #define TRANSACTION_WITHDRAW    2
 #define TRANSACTION_CHECKBAL    4
 
+//auth responses
 #define AUTH_SUCCESS    0
 #define AUTH_FAIL       -1
 
+//transaction responses
 #define RESPONSE_SUCCESS            0
-#define RESPONSE_INSUFFICIENT_FUNDS 1
-#define RESPONSE_INVALID_REQUEST    4
+#define RESPONSE_INSUFFICIENT_FUNDS -1
+#define RESPONSE_INVALID_REQUEST    -2
+
 
 #define CHALLENGE_SIZE      64
-#define CHALLENGE_TIMEOUT   10000
+#define CHALLENGE_TIMEOUT   10
 
 typedef struct sockaddr_in socket_address;
 

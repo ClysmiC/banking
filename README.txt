@@ -32,7 +32,7 @@ so they should be tested on a Unix computer. If they fail to run successfully in
 - TCP Application
 The TCP application protocol is as follows:
 On server start, the server initializes 5 users into memory (see initUsers(...) in banking.h).
-The act of the client connecting to the server initiates a 64-character alpha-numeric challenge string being sent from the server.
+The act of the client connecting to the server initiates a 64-character alpha-numeric challenge string (valid for 10s) being sent from the server.
 Upon receiving this challenge, the client computes the md5 hash of the following string: <name in lowercase> + <password> + <challenge>.
 (Note: the username is invariably stored in all lower-case on the server side, so in order to acheive case-insensitive usernames, it must be converted to
 lowercase before being hashed). The client then sends the following 3 things to the server, in this order: length of username (4 bytes), username

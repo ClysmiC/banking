@@ -36,18 +36,6 @@ int main(int argc, char *argv[])
     char *name = argv[2];
     char *pass = argv[3];
 
-    //get rid of dumb quotation marks
-    if(name[0] == '\"')
-    {
-        name = &name[1];
-        name[strlen(name) - 1] = '\0';
-    }
-    if(pass[0] == '\"')
-    {
-        pass = &pass[1];
-        pass[strlen(pass) - 1] = '\0';
-    }
-
     if(strlen(name) > 30 || strlen(pass) > 30)
     {
         dieWithError("\nUsername/password must be max 30 characters.\n");
