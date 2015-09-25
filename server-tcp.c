@@ -248,10 +248,7 @@ void authenticate(int commSocket, bank_user **user_out)
     preHash[preHashSize - 1] = '\0';
 
     debugPrintf("Pre-hashed string: %s\n", preHash);
-
-    /**compute md5 hash**/
     unsigned int result = *md5(preHash, strlen(preHash));
-
     debugPrintf("Hashed result: %#x\n", result);
 
     if(result != hash)

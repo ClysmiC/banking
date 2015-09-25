@@ -103,23 +103,25 @@ int main(int argc, char *argv[])
     serverAddress.sin_addr.s_addr = inet_addr(serverIp);
     serverAddress.sin_port = htons(serverPort);
 
-    //response available      
+    //response available  
     char inBuffer[68];
-    char *challenge;
+    char outBuffer[64];
+    char *challenge = &inBuffer[4]; //points to challenge within inBuffer
 
     /**Send challenge request and listen for response**/
     bool ackReceived = false;
 
+    //put message type into out buffer
+    *((int*)outBuffer) = REQ_CHALLENGE;
+
     int attempts = 0;
     while(attempts < 10)
     {
-        char req_challenge[64];
-        *((int*)req_challenge) = REQ_CHALLENGE;
         int bytesSent;
 
-        if((bytesSent = sendto(commSocket, &req_challenge, sizeof(req_challenge), 0, (struct sockaddr*)&serverAddress, sizeof(serverAddress))) < sizeof(int))
+        if((bytesSent = sendto(commSocket, &outBuffer, sizeof(outBuffer), 0, (struct sockaddr*)&serverAddress, sizeof(serverAddress))) < sizeof(outBuffer))
         {
-            debugPrintf("Sent unexpected number of bytes. Expected: %d - Sent: %d\n", sizeof(req_challenge), bytesSent);
+            debugPrintf("Sent unexpected number of bytes. Expected: %d - Sent: %d\n", sizeof(outBuffer), bytesSent);
             dieWithError("Dying.");
         }
 
@@ -132,7 +134,7 @@ int main(int argc, char *argv[])
         int rc, result;
 
         /* Set time limit. */
-        timeout.tv_sec = 1;
+        timeout.tv_sec = UDP_TIMEOUT;
         timeout.tv_usec = 0;
         
         FD_ZERO(&fds);
@@ -165,8 +167,7 @@ int main(int argc, char *argv[])
             dieWithError("Received wrong message type");
         }
 
-        challenge = &inBuffer[sizeof(int)];
-        debugPrintf("Challenge received: %s\n", &inBuffer[sizeof(int)]);
+        debugPrintf("Challenge received: %s\n", challenge);
         ackReceived = true;
         break;
     }
@@ -176,10 +177,187 @@ int main(int argc, char *argv[])
         dieWithError("Did not receive challenge from server.");
     }
 
+    /**Fill out answer + request**/
+    *((int*)outBuffer) = REQ_TRANSACTION;
+    *((int*)&outBuffer[4]) = REQ_TRANSACTION;
+
+    
+    /**Hash user + pass + challenge**/
+    int preHashSize = strlen(argv[2]) + strlen(argv[3]) + CHALLENGE_SIZE + 1;
+    char preHash[preHashSize];
+    memcpy(preHash, argv[2], strlen(argv[2]));
+    memcpy(&preHash[strlen(argv[2])], argv[3], strlen(argv[3]));
+    memcpy(&preHash[strlen(argv[2]) + strlen(argv[3])], challenge, CHALLENGE_SIZE);
+    preHash[preHashSize - 1] = '\0';
+
+    debugPrintf("Pre-hashed string: %s\n", preHash);
+    unsigned int result = *md5(preHash, strlen(preHash));
+    debugPrintf("Hashed result: %#x\n", result);
+
+    *((int*)&outBuffer[4]) = result;
+
+    /**Fill out transaction info**/
+    int requestType;
+    double requestAmount;
+
+    if(strcasecmp(argv[4], "deposit") == 0)
+    {
+        requestType = TRANSACTION_DEPOSIT;
+    }
+    else if(strcasecmp(argv[4], "withdraw") == 0)
+    {
+        requestType = TRANSACTION_WITHDRAW;
+    }
+    else if(strcasecmp(argv[4], "checkbal") == 0)
+    {
+        requestType = TRANSACTION_CHECKBAL;
+    }
+    else
+    {
+        dieWithError("Internal error processing request type.");
+    }
+
+    requestAmount = atof(argv[5]);
+
+    *((int*)&outBuffer[8]) = requestType;
+    *((double*)&outBuffer[12]) = requestAmount;
+
+    debugPrintf("Transaction type: %d - Amount: %.2f\n", requestType, requestAmount);
+
+    time_t t;
+    srand((unsigned) time(&t));
+    unsigned int id = (unsigned int)rand();
+    *((unsigned int*)&outBuffer[20]) = id;
+
+    debugPrintf("Transaction id: %u\n", id);
+
+    /**Place user name at end of buffer**/
+    memcpy(&outBuffer[24], argv[2], strlen(argv[2]));
+
+
+
+    /**Send the answer + request**/
     attempts = 0;
     ackReceived = false;
     while(attempts < 10)
     {
+        int bytesSent;
 
+        if((bytesSent = sendto(commSocket, &outBuffer, sizeof(outBuffer), 0, (struct sockaddr*)&serverAddress, sizeof(serverAddress))) < sizeof(outBuffer))
+        {
+            debugPrintf("Sent unexpected number of bytes. Expected: %d - Sent: %d\n", sizeof(outBuffer), bytesSent);
+            dieWithError("Dying.");
+        }
+
+        debugPrintf("Sent answer + transaction request\n");
+        attempts++;
+
+        /**Wait for response or timeout**/
+        fd_set fds;
+        struct timeval timeout;
+        int rc, result;
+
+        /* Set time limit. */
+        timeout.tv_sec = UDP_TIMEOUT;
+        timeout.tv_usec = 0;
+        
+        FD_ZERO(&fds);
+        FD_SET(commSocket, &fds);
+
+        int val = select(commSocket + 1, &fds, NULL, NULL, &timeout);
+        if(val <= 0)
+        {
+            //failed
+            continue;
+        }
+
+        //response available
+        int responseBytes = recv(commSocket, inBuffer, sizeof(inBuffer), 0);
+
+        if(responseBytes != sizeof(inBuffer))
+        {
+            printf("Expected: %d - Received: %d", sizeof(challenge), responseBytes);
+            dieWithError("Received wrong number of bytes when receiving transaction response.");
+        }
+
+        int responseType = *((int*)inBuffer);
+
+        debugPrintf("Received message type: %d\n", responseType);
+
+        //make sure it is type response
+        if(responseType != RESPONSE)
+        {
+            printf("Expected: %d - Actual: %d", RESPONSE, responseType);
+            dieWithError("Received wrong message type");
+        }
+
+        int response;
+        double updatedBalance;
+
+        response = *((int*)&inBuffer[4]);
+        updatedBalance = *((double*)&inBuffer[8]);
+
+        /**PRINT RESULTS**/
+        debugPrintf("Response: %d\n", response);
+
+        if(response == AUTH_FAIL)
+        {
+            printf("\nAuthentication failed.\n");
+            close(commSocket);
+            exit(0);
+        }
+
+        debugPrintf("Updated Balance: %.2f\n", updatedBalance);
+
+        printf("\nWelcome to online banking, %s\n", argv[2]);
+        
+        if(requestType == TRANSACTION_DEPOSIT)
+        {
+            if(response == RESPONSE_SUCCESS)
+            {
+                printf("Deposit of $%.2f successful. New balance: %.2f\n", requestAmount, updatedBalance);
+            }
+            else if(response == RESPONSE_INVALID_REQUEST)
+            {
+                printf("Invalid deposit request\n");
+            }
+        }
+        else if(requestType == TRANSACTION_WITHDRAW)
+        {
+            if(response == RESPONSE_SUCCESS)
+            {
+                printf("Withdrawal of $%.2f successful. New balance: %.2f\n", requestAmount, updatedBalance);
+            }
+            else if(response == RESPONSE_INSUFFICIENT_FUNDS)
+            {
+                printf("Insufficient funds to withdraw $%.2f. Balance remains at $%.2f\n", requestAmount, updatedBalance);
+            }
+            else   
+            {
+                printf("Invalid withdraw request\n");
+            }
+        }
+        else if(requestType == TRANSACTION_CHECKBAL)
+        {
+            if(response == RESPONSE_SUCCESS)
+            {
+                printf("Your balance is %.2f\n", updatedBalance);
+            }
+            else if(response == RESPONSE_INVALID_REQUEST)
+            {
+                printf("Invalid checkbal request\n");
+            }
+        }
+
+        close(commSocket);
+        exit(0);
+
+        ackReceived = true;
+        break;
+    }
+
+    if(!ackReceived)
+    {
+        dieWithError("Did not receive response from server. Transaction may have succesfully occured. Please run checkbal when connection is regained.");
     }
 }

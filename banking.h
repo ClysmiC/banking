@@ -22,21 +22,12 @@
 #define REQ_TRANSACTION         4
 #define RESPONSE                8 
 
-//udp client states
-#define CHALL_REQUESTED         1
-#define TRANSACTION_REQUESTED   2
-#define RESPONSE_ACKED          4
-
-//udp server states
-#define CHALLENGE_SENT          1
-#define RESPONSE_SENT           2
-
 typedef struct
 {
     int ip;
     int port;
     char challenge[64];
-    int auth;
+    unsigned int last_trans_id;
 } client_state;
 
 
@@ -49,7 +40,7 @@ typedef struct
 
 //auth responses
 #define AUTH_SUCCESS    0
-#define AUTH_FAIL       -1
+#define AUTH_FAIL       -4
 
 //transaction responses
 #define RESPONSE_SUCCESS            0
