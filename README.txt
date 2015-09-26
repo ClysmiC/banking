@@ -14,19 +14,28 @@ email: asmith379@gatech.edu
 - server-tcp.c 		- TCP server for handling withdraw/deposit requests from clients.
 - remotebank-udp.c 	- UDP client for making withdraw/deposit requests to server.
 - server-udp.c 		- UDP server for handling withdraw/deposit requests from clients.
+- Makefile 			- File with the commands to compile the project using "make".
+- sample.txt 		- Sample output from running the program.
+- README.txt 		- This readme file
 
 ============Compiling & Running============
 A makefile is included. Running the command "make" should compile and output the following executables:
 
-- remotebank-tcp.exe 	- Run using "./remotebank-tcp <Server IP>:<Port> <Username> <Password> <Transaction Type> <Transaction Amount> [-d]"
+- remotebank-tcp 		- Run using "./remotebank-tcp <Server IP>:<Port> <Username> <Password> <Transaction Type> <Transaction Amount> [-d]"
 						- Transaction type may be "deposit", "withdraw", or "checkbal". Amount is always required, but ignored when doing checkbal.
 						- Fails if no server-tcp with the specified ip/port is running.
 
-- server-tcp.exe 		- Run using "./server-tcp <Port> [-d]"
+- server-tcp 			- Run using "./server-tcp <Port> [-d]"
 						- Runs indefinitely, handling one client at a time.
 
-These programs were developed and tested in Windows 10, using Cygwin to simulate a Unix-like environment. The CoC computers may not have Cygwin installed,
-so they should be tested on a Unix computer. If they fail to run successfully in that environment, please try test them in a Windows environment using Cygwin.
+- remotebank-udp	 	- Run using "./remotebank-udp <Server IP>:<Port> <Username> <Password> <Transaction Type> <Transaction Amount> [-d]"
+						- Transaction type may be "deposit", "withdraw", or "checkbal". Amount is always required, but ignored when doing checkbal.
+						- Fails if no server-udp with the specified ip/port is running.
+
+- server-udp	 		- Run using "./server-udp <Port> [-d]"
+						- Runs indefinitely, can handle requests from any client at any time.
+
+These programs have been tested on Linux, and Windows (using Cygwin). Please grade them on a Linux computer.
 
 ============Application Protocol============
 - TCP Application
