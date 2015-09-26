@@ -1,0 +1,183 @@
+All output shown is without -d flag unless otherwise specified.
+
+==============TCP==================
+
+Successful scenario (with -d flag):
+
+Client:
+$ ./remotebank-tcp 127.0.0.1:100 andrew bankpw deposit 15 -d
+IP: 127.0.0.1, Port: 100
+TCP socket created. File descriptor: 3
+Connecting to 127.0.0.1:100 . . .
+Connection successful
+Client is on 127.0.0.1:35027
+Begin receiving challenge
+Received 64 bytes
+Challenge received: VapFLPo0JPXuFzY6YJlo1FF1NJKWi0SPhWQd8cq3HvslsEG3JTOWwI1JTOyv       dgVI
+Pre-hashed string: andrewbankpwVapFLPo0JPXuFzY6YJlo1FF1NJKWi0SPhWQd8cq3HvslsEG3J       TOWwI1JTOyvdgVI
+Hashed result: 0x17c1fac9
+Hash sent
+Awaiting authentication
+Received 4 bytes
+AuthResponse: 0
+Authentication successful
+Sent request. Type: 1 -- Amount: 15.00
+Receiving transaction response . . .
+Received 4 bytes
+Received 8 bytes
+Response: 0 -- Balance: $265.00
+
+Welcome to online banking, andrew
+Deposit of $15.00 successful. New balance: 265.00
+
+
+
+
+
+Server:
+$ ./server-tcp 100 -d
+Port number: 100
+TCP socket created. File descriptor: 3
+Binding to port 100
+Bound.
+Listening.
+
+Server-tcp is bound and listening.
+
+Handling client 127.0.0.1:35027
+Socket file descriptor: 4
+Sending challenge: VapFLPo0JPXuFzY6YJlo1FF1NJKWi0SPhWQd8cq3HvslsEG3JTOWwI1JTOyvdgVI
+Challenge sent. Expires at: 1443238871
+Awaiting response . . .
+Receiving username length . . .
+Received 4 bytes
+Username length: 6
+Receiving username . . .
+Received 6 bytes
+Username: andrew
+Receiving md5 hash . . .
+Received 4 bytes
+Hashed received: 0x17c1fac9
+User "andrew" found
+Pre-hashed string: andrewbankpwVapFLPo0JPXuFzY6YJlo1FF1NJKWi0SPhWQd8cq3HvslsEG3JTOWwI1JTOyvdgVI
+Hashed result: 0x17c1fac9
+Authenticated as andrew:bankpw
+Receiving transaction request . . .
+Received 4 bytes
+Received 8 bytes
+Received request. Type: 1 -- Amount: 15.00
+andrew deposited $15.00 -- Balance: 265.00
+Sent response: 0 -- Updated Balance: 265.00
+
+
+---------------------------------------------------------
+
+
+Server not running (with -d flag):
+$ ./remotebank-tcp 127.0.0.1:100 andrew bankpw deposit 15 -d
+IP: 127.0.0.1, Port: 100
+TCP socket created. File descriptor: 3
+Connecting to 127.0.0.1:100 . . .
+connect(...) failed.
+
+---------------------------------------------------------
+
+Wrong password/user:
+
+$ ./remotebank-tcp 127.0.0.1:100 andrew wrong withdraw 100
+Authentication failed
+
+
+---------------------------------------------------------
+
+Invalid arguments:
+$ ./remotebank-tcp 127.0.322.1:100 andrew bankpw deposit 15 -d
+Invalid IP address. Please use dotted quad notation.
+
+$ ./remotebank-tcp 127.0.0.1:100 andrew bankpw depst 15
+Transaction type must be one of the following:
+        deposit
+        withdraw
+        checkbal
+
+---------------------------------------------------------
+
+Withdraw too much:
+$ ./remotebank-tcp 127.0.0.1:100 andrew bankpw withdraw 1500
+Welcome to online banking, andrew
+Insufficient funds to withdraw $1500.00. Balance remains at $265.00
+
+---------------------------------------------------------
+
+Negative amount:
+$ ./remotebank-tcp 127.0.0.1:100 andrew bankpw withdraw -100
+Welcome to online banking, andrew
+Invalid withdraw request
+
+
+========================UDP===============================
+(most invalid arguments/amounts output is identical, so it isn't shown)
+
+Success (with -d flag):
+$ ./server-udp 100 -d
+Port number: 100
+UDP socket created. File descriptor: 3
+Binding to port 100
+Waiting for message . . .
+Received from 127.0.0.1:65269
+Message type: 1
+Challenge sent. Expires at: 1443239231
+Initializing state for connection: 127.0.0.1:65269
+Sending challenge: rcHxj0hZhj9NNtD61m2Hy49ObW6SwSfVOxEP0EpIWWmFoNx89wL8iykY2gaaqCCt
+Waiting for message . . .
+Received from 127.0.0.1:65269
+Message type: 4
+Received transaction request from: 127.0.0.1:65269
+Hash: 0x93e39247 - Type: 2 - Amount: 100.00 - Id: 1925794019 - User: andrew
+Pre-hashed string: andrewbankpwrcHxj0hZhj9NNtD61m2Hy49ObW6SwSfVOxEP0EpIWWmFoNx89wL8iykY2gaaqCCt
+Hashed result: 0x93e39247
+User is authorized to make transaction.
+andrew withdrew $100.00 -- Balance: 150.00
+Sending response. Type: 8 - Response: 0 - Updated Balance 150.00
+
+
+$ ./remotebank-udp 127.0.0.1:100 andrew bankpw withdraw 100 -d
+IP: 127.0.0.1, Port: 100
+UDP socket created. File descriptor: 3
+Sent challenge request
+Received message type: 2
+Challenge received: rcHxj0hZhj9NNtD61m2Hy49ObW6SwSfVOxEP0EpIWWmFoNx89wL8iykY2gaaqCCt
+Pre-hashed string: andrewbankpwrcHxj0hZhj9NNtD61m2Hy49ObW6SwSfVOxEP0EpIWWmFoNx89wL8iykY2gaaqCCt
+Hashed result: 0x93e39247
+Transaction type: 2 - Amount: 100.00
+Transaction id: 1925794019
+Sent answer + transaction request
+Received message type: 8
+Response: 0
+Updated Balance: 150.00
+
+Welcome to online banking, andrew
+Withdrawal of $100.00 successful. New balance: 150.00
+
+
+
+-------------------------------------------------------------------------------------------
+
+Server not connected (with -d flag):
+$ ./remotebank-udp 127.0.0.1:100 andrew bankpw withdraw 100 -d
+IP: 127.0.0.1, Port: 100
+UDP socket created. File descriptor: 3
+Sent challenge request
+Sent challenge request
+Sent challenge request
+Sent challenge request
+Sent challenge request
+Sent challenge request
+Sent challenge request
+Sent challenge request
+Sent challenge request
+Sent challenge request
+Did not receive challenge from server.
+
+
+

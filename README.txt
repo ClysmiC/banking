@@ -30,7 +30,6 @@ so they should be tested on a Unix computer. If they fail to run successfully in
 
 ============Application Protocol============
 - TCP Application
-The TCP application protocol is as follows:
 On server start, the server initializes 5 users into memory (see initUsers(...) in banking.h).
 The act of the client connecting to the server initiates a 64-character alpha-numeric challenge string (valid for 10s) being sent from the server.
 Upon receiving this challenge, the client computes the md5 hash of the following string: <name in lowercase> + <password> + <challenge>.
@@ -50,9 +49,39 @@ the withdrawal/deposit (or does nothing in the case of checkbal) and returns a R
 sends the updated balance to the client immediately afterwards, and then closes the connection. The client receives the response and updated balance,
 displays it to the user, then closes the socket and exits.
 
+- UDP Application
+On server start, the server initializes 5 users into memory (see initUsers(...) in banking.h).
+The client always sends 64 byte messages to the server, and the server always sends 68 byte messages to the client. The first 4 bytes of every
+message indicate what type of message it is. The client can send the following two message types: "Request Challenge" and "Anwser + Request Transaction".
+The server can send the following two message types: "Challenge" and "Transaction Response". The client must initiate the communication by sending
+a "Request Challenge" message. The first 4 bytes indicate the message type of REQ_CHALLENGE, and the remaining 60 bytes are unused. When the server 
+receives a REQ_CHALLENGE message, it generates a random 64 character alphanumeric string. It stores the requesting server IP and port, as well as the
+challenge (valid for 10s) being assigned to them in its list of "active connections". It then sends a CHALLENGE packet, whose first 4 bytes are the 
+message type, and remaining 64 bytes are the challenge string. After the client sends a REQ_CHALLENGE, it listens for a CHALLENGE message. If it does not 
+hear one within 2 seconds, it assumes a packet was lost, and resends the REQ_CHALLENGE. If it attempts this 10 times and still receives no message, it 
+exits. After receiving CHALLENGE, The client then computes the md5 hash of (<name in lowercase> + <password> + <challenge>), and sends a packet contaning 
+its answer to the challenge as well as its transaction request. The packet is layed out as follows. Bytes 0-3: msg type - 4-7: md5 hash; 8-11: transaction 
+type; 12-19: transaction amount; 20-23 transaction id; 24-63 username. All of the fields are self-explanatory, besides the transaction id. The id is a 
+randomly generated number that the server checks to make sure the client didn't think a packet was lost and send a duplicate request. The server responds 
+to REQ_TRANSACTIONS with RESPONSE messages. These messages have 4 bytes for the type, 4 for the response code, and 8 bytes for the remaining balance. The 
+remaining 54 bytes go unused. When the server gets a REQ_TRANSACTION message, it first looks up the challenge string for this IP/port, and looks 
+up the username from the message. If neither of these are found, it sends a RESPONSE with code AUTH_FAIL. It then calculates the md5 on the server side,
+sending a RESPONSE with code AUTH_FAIL if the received and calculated hashes don't match. It then checks the transaction id against the last successful
+transaction id for this IP/port. If they match, it does nothing, but still sends a RESPONSE with code SUCCESS, and the unchanged balance. It does this
+because it assumes the duplicate transaction was due to the client not receiving the response the first time. If the client tries to deposit or withdraw a 
+non-positive amount, the server sends a RESPONE with code INVALID_REQUEST message. If the client tries to withdraw more money than is in their account, 
+the server sends a RESPONSE message with code INSUFFICIENT_FUNDS. Otherwise, it performs the withdrawal/deposit (or does nothing in the case of checkbal) 
+and returns a RESPONSE with code SUCCESS. In the case of successful withdrawals/deposits, it also records the transaction id for this Server/IP to prevent 
+a duplicate request. All RESPONSE messages (besides those with code AUTH_FAIL) also contain the updated balance to the client immediately 
+after the transaction. After the client sends a REQ_TRANSACTION, it listens for a RESPONSE message. If it does not hear one within 2 seconds,
+it assumes a packet was lost, and resends the REQ_TRANSACTION (with the same transaction id). If it attempts this 10 times and still receives no message, 
+it exits, telling the user that the transaction MAY have gone through, and they should use "checkbal" before attempting any more transactions to find out. 
+If it gets a response, it displays to the user if their credentials were wrong or the transaction failed or succeeded, as described by the response code, 
+as well as the updated balance. The client then closes the socket to the server and exits.
+
 ============Known Bugs/Limitations============
 - Protocol assumes that both hosts agree on the format of data (primarily endianness and the size of primitive types).
-- Protocol does not use time-outs. As long as both sides play nicely and follow the protocol and do not randomly disconnect this does not present a problem.
+- TCP Protocol does not use time-outs. As long as both sides play nicely and follow the protocol and do not randomly disconnect this does not present a problem
 
 ============Attributions============
 - Much of the code's structure was inspired by the TCP and UDP client/server examples in TCP/IP Sockets in C by Kenneth Calvert and Michael Donahoo

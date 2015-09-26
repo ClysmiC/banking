@@ -27,6 +27,7 @@ typedef struct
     int ip;
     int port;
     char challenge[64];
+    long challengeExpiration;
     unsigned int last_trans_id;
 } client_state;
 

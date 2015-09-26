@@ -98,10 +98,17 @@ int main(int argc, char *argv[])
         /**CHALLENGE REQUESTED**/
         if(inMsgType == REQ_CHALLENGE)
         {
-            /**send challenge**/
+            /**generate challenge**/
             char randomString[CHALLENGE_SIZE + 1];
             generateRandomString(randomString, CHALLENGE_SIZE);
             randomString[CHALLENGE_SIZE] = '\0';
+
+            //calculate expiration time of challenge
+            time_t currTime;
+            time(&currTime);
+            long challengeExpirationTime = currTime + CHALLENGE_TIMEOUT;
+            
+            debugPrintf("Challenge sent. Expires at: %ld\n", challengeExpirationTime);
 
             /**record ip address and record the challenge for it**/
             //first search for existing connections and override the challenge with the one we are sending out
@@ -112,6 +119,7 @@ int main(int argc, char *argv[])
                 {
                     connectionAlreadyExists = true;
                     memcpy(clients[i].challenge, randomString, CHALLENGE_SIZE);
+                    clients[i].challengeExpiration = challengeExpirationTime;
                     break;
                 }
             }
@@ -122,6 +130,7 @@ int main(int argc, char *argv[])
                 clients[clientNumber].ip = incomingIp;
                 clients[clientNumber].port = incomingPort;
                 memcpy(clients[clientNumber].challenge, randomString, CHALLENGE_SIZE);
+                clients[clientNumber].challengeExpiration = challengeExpirationTime;
 
                 clientNumber++;
                 clientNumber % MAX_CONNECTIONS;
@@ -205,6 +214,21 @@ int main(int argc, char *argv[])
                 debugPrintf("Pre-hashed string: %s\n", preHash);
                 unsigned int result = *md5(preHash, strlen(preHash));
                 debugPrintf("Hashed result: %#x\n", result);
+
+                /**
+                 * Send auth_fail if challenge is expired
+                 */
+                time_t currTime;
+                time(&currTime);
+                long curr = currTime;
+                
+                if(curr > connected_client->challengeExpiration)
+                {
+                    debugPrintf("Challenge Expired. Auth failed.\n");
+                    *((int*)&outBuffer[4]) = AUTH_FAIL;
+                    sendto(serverSocket, outBuffer, sizeof(outBuffer), 0, (struct sockaddr*)&clientAddress, sizeof(clientAddress));
+                    continue;
+                }
 
                 /**
                  * Send auth_fail is hashes unequel
